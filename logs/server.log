@@ -1,0 +1,13 @@
+
+> vibe-generated-app@1.0.0 dev
+> vite
+
+
+  VITE v5.4.20  ready in 211 ms
+
+  ➜  Local:   http://localhost:3000/
+  ➜  Network: http://172.20.0.106:3000/
+1:45:11 PM [vite] Pre-transform error: Transform failed with 1 error:
+/home/workspace/src/components/Hero.jsx:28:46: ERROR: Expected "{" but found "\\"
+1:45:11 PM [vite] ✨ new dependencies optimized: lucide-react
+1:45:11 PM [vite] ✨ optimized dependencies changed. reloading
