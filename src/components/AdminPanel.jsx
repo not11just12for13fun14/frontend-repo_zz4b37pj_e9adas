@@ -87,10 +87,13 @@ function CategoryForm({ onCreated }) {
     try {
       const res = await fetch(`${API}/categories`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-Role": "admin" },
         body: JSON.stringify({ name, slug })
       });
-      if (!res.ok) throw new Error("Gagal menambahkan kategori");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || "Gagal menambahkan kategori");
+      }
       setName("");
       setSlug("");
       onCreated?.();
@@ -139,30 +142,20 @@ function ProductForm({ categories, onCreated }) {
     }
     setLoading(true);
     try {
-      const payload = {
-        title,
-        price: Number(price),
-        description,
-        category,
-        image,
-      };
+      const payload = { title, price: Number(price), description, category, image };
       const res = await fetch(`${API}/products`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-Role": "admin" },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error("Gagal menambahkan produk");
-      setTitle("");
-      setPrice("");
-      setDescription("");
-      setCategory("");
-      setImage("");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || "Gagal menambahkan produk");
+      }
+      setTitle(""); setPrice(""); setDescription(""); setCategory(""); setImage("");
       onCreated?.();
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
   };
 
   return (
