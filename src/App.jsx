@@ -14,6 +14,7 @@ export default function App() {
   const [cart, setCart] = useState([]);
   const [loading, setLoading] = useState(true);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [cartOpen, setCartOpen] = useState(false);
 
   // Catalog enhancements
   const [sortBy, setSortBy] = useState("relevance"); // relevance | price-asc | price-desc
@@ -170,6 +171,7 @@ export default function App() {
       if (!res.ok) throw new Error(data.detail || "Gagal membuat pesanan");
       alert(`Pesanan berhasil! ID: ${data._id}`);
       setCart([]);
+      setCartOpen(false);
     } catch (e) {
       console.error(e);
       alert(`Checkout gagal: ${e.message}`);
@@ -178,7 +180,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-emerald-50/50">
-      <Header onSearch={setQuery} cartCount={cart.length} />
+      <Header onSearch={setQuery} cartCount={cart.length} onCartClick={() => setCartOpen(true)} />
       <Hero />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -352,7 +354,7 @@ export default function App() {
           )}
         </section>
 
-        <aside className="mt-12 rounded-2xl border border-gray-200 bg-white p-5">
+        <aside className="mt-12 rounded-2xl border border-gray-200 bg-white p-5 hidden md:block">
           <h3 className="text-lg font-semibold mb-3">Ringkasan Belanja</h3>
           {cart.length === 0 ? (
             <div className="text-gray-500">Keranjang kosong</div>
@@ -375,6 +377,53 @@ export default function App() {
           )}
         </aside>
       </main>
+
+      {/* Cart Drawer */}
+      {cartOpen && (
+        <div className="fixed inset-0 z-50">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setCartOpen(false)}
+          />
+          <div className="absolute right-0 top-0 h-full w-full sm:w-[26rem] bg-white shadow-xl flex flex-col">
+            <div className="p-4 border-b flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Keranjang</h3>
+              <button onClick={() => setCartOpen(false)} className="px-3 py-1.5 rounded-md border border-gray-200 hover:bg-gray-50">Tutup</button>
+            </div>
+            <div className="flex-1 overflow-auto p-4">
+              {cart.length === 0 ? (
+                <div className="text-gray-500">Keranjang kosong</div>
+              ) : (
+                <div className="space-y-4">
+                  {cart.map((i) => (
+                    <div key={i._id} className="flex items-start gap-3">
+                      <img src={i.image || "https://images.unsplash.com/photo-1584270354949-c26b0d5b5a35?q=80&w=300&auto=format&fit=crop"} className="w-16 h-16 rounded-lg object-cover" />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate">{i.title}</div>
+                        <div className="text-emerald-700 font-semibold">Rp{i.price?.toLocaleString("id-ID")}</div>
+                        <div className="mt-2 flex items-center gap-2">
+                          <button onClick={() => changeQty(i, Math.max(0, i.qty - 1))} className="w-8 h-8 grid place-items-center rounded-lg border border-gray-200 bg-white hover:bg-gray-50">-</button>
+                          <span className="min-w-[1.5rem] text-center text-sm font-medium">{i.qty}</span>
+                          <button onClick={() => changeQty(i, i.qty + 1)} className="w-8 h-8 grid place-items-center rounded-lg border border-gray-200 bg-white hover:bg-gray-50">+</button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="p-4 border-t">
+              <div className="flex items-center justify-between font-semibold">
+                <div>Subtotal</div>
+                <div>Rp{subtotal.toLocaleString("id-ID")}</div>
+              </div>
+              <button onClick={checkout} className="w-full mt-3 px-4 py-2 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700">
+                Checkout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <footer className="mt-16 border-t border-gray-200 py-8 text-center text-sm text-gray-500">
         © {new Date().getFullYear()} BlueMarket. All rights reserved.
