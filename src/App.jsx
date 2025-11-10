@@ -15,6 +15,13 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [adminOpen, setAdminOpen] = useState(false);
 
+  // Catalog enhancements
+  const [sortBy, setSortBy] = useState("relevance"); // relevance | price-asc | price-desc
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(12);
+
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
@@ -35,13 +42,38 @@ export default function App() {
     loadData();
   }, [loadData]);
 
-  const filtered = useMemo(() => {
-    return products.filter((p) => {
-      const matchesQ = !query || p.title?.toLowerCase().includes(query.toLowerCase());
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [query, activeCat, minPrice, maxPrice, sortBy, perPage]);
+
+  const filteredSorted = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const min = minPrice !== "" ? Number(minPrice) : null;
+    const max = maxPrice !== "" ? Number(maxPrice) : null;
+
+    let arr = products.filter((p) => {
+      const matchesQ = !q || p.title?.toLowerCase().includes(q) || p.description?.toLowerCase().includes(q);
       const matchesC = !activeCat || p.category === activeCat;
-      return matchesQ && matchesC;
+      const price = Number(p.price) || 0;
+      const matchesMin = min === null || price >= min;
+      const matchesMax = max === null || price <= max;
+      return matchesQ && matchesC && matchesMin && matchesMax;
     });
-  }, [products, query, activeCat]);
+
+    if (sortBy === "price-asc") arr.sort((a, b) => (a.price || 0) - (b.price || 0));
+    else if (sortBy === "price-desc") arr.sort((a, b) => (b.price || 0) - (a.price || 0));
+    // relevance keeps original order
+
+    return arr;
+  }, [products, query, activeCat, minPrice, maxPrice, sortBy]);
+
+  const total = filteredSorted.length;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const pageItems = useMemo(() => {
+    const start = (page - 1) * perPage;
+    return filteredSorted.slice(start, start + perPage);
+  }, [filteredSorted, page, perPage]);
 
   const addToCart = (product) => {
     setCart((prev) => {
@@ -56,6 +88,15 @@ export default function App() {
   };
 
   const subtotal = useMemo(() => cart.reduce((s, i) => s + (i.price || 0) * i.qty, 0), [cart]);
+
+  const clearFilters = () => {
+    setQuery("");
+    setActiveCat("");
+    setMinPrice("");
+    setMaxPrice("");
+    setSortBy("relevance");
+    setPerPage(12);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-emerald-50/50">
@@ -100,23 +141,81 @@ export default function App() {
         )}
 
         <section id="products" className="mt-10">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-gray-900">Produk</h2>
-            <div className="text-gray-600">{filtered.length} item</div>
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-4">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Produk</h2>
+              <div className="text-gray-600 text-sm">{total} item ditemukan</div>
+            </div>
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <label className="block text-xs text-gray-600">Urutkan</label>
+                <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="mt-1 px-3 py-2 border border-gray-200 rounded-lg bg-white">
+                  <option value="relevance">Paling relevan</option>
+                  <option value="price-asc">Harga terendah</option>
+                  <option value="price-desc">Harga tertinggi</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600">Min Harga</label>
+                <input type="number" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} placeholder="0" className="mt-1 w-28 px-3 py-2 border border-gray-200 rounded-lg" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600">Max Harga</label>
+                <input type="number" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} placeholder="" className="mt-1 w-28 px-3 py-2 border border-gray-200 rounded-lg" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600">Tampilkan</label>
+                <select value={perPage} onChange={(e) => setPerPage(Number(e.target.value))} className="mt-1 px-3 py-2 border border-gray-200 rounded-lg bg-white">
+                  <option value={8}>8</option>
+                  <option value={12}>12</option>
+                  <option value={16}>16</option>
+                  <option value={24}>24</option>
+                </select>
+              </div>
+              <button onClick={clearFilters} className="px-3 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50">Reset</button>
+            </div>
           </div>
 
           {loading ? (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="h-64 rounded-2xl bg-gray-100 animate-pulse" />
-              ))}
+                <div key={i} className="h-64 rounded-2xl bg-gray-100 animate-pulse" />)
+              )}
+            </div>
+          ) : pageItems.length === 0 ? (
+            <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center text-gray-600">
+              Tidak ada produk yang cocok dengan filter saat ini.
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {filtered.map((p) => (
-                <ProductCard key={p._id} product={p} onAdd={addToCart} />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {pageItems.map((p) => (
+                  <ProductCard key={p._id} product={p} onAdd={addToCart} />
+                ))}
+              </div>
+
+              {totalPages > 1 && (
+                <div className="mt-6 flex items-center justify-center gap-2">
+                  <button
+                    className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white disabled:opacity-50"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                  >
+                    Prev
+                  </button>
+                  <div className="text-sm text-gray-700">
+                    Halaman {page} / {totalPages}
+                  </div>
+                  <button
+                    className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white disabled:opacity-50"
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </section>
 

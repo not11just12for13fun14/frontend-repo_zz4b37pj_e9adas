@@ -3,13 +3,13 @@
 > vite
 
 
-  VITE v5.4.20  ready in 212 ms
+  VITE v5.4.20  ready in 205 ms
 
   ➜  Local:   http://localhost:3000/
   ➜  Network: http://172.20.0.106:3000/
-1:51:19 PM [vite] Pre-transform error: Transform failed with 1 error:
+1:53:47 PM [vite] Pre-transform error: Transform failed with 1 error:
 /home/workspace/src/components/Hero.jsx:28:46: ERROR: Expected "{" but found "\\"
-1:51:21 PM [vite] Internal server error: Transform failed with 1 error:
+1:53:49 PM [vite] Internal server error: Transform failed with 1 error:
 /home/workspace/src/components/Hero.jsx:28:46: ERROR: Expected "{" but found "\\"
   Plugin: vite:esbuild
   File: /home/workspace/src/components/Hero.jsx:28:46
@@ -32,7 +32,7 @@
       at readableAddChunkPushByteMode (node:internal/streams/readable:510:3)
       at Readable.push (node:internal/streams/readable:390:5)
       at Pipe.onStreamRead (node:internal/stream_base_commons:189:23)
-1:51:23 PM [vite] Internal server error: Transform failed with 1 error:
+1:54:22 PM [vite] Internal server error: Transform failed with 1 error:
 /home/workspace/src/components/Hero.jsx:28:46: ERROR: Expected "{" but found "\\"
   Plugin: vite:esbuild
   File: /home/workspace/src/components/Hero.jsx:28:46
