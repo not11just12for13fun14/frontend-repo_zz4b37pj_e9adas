@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import Header from "../components/Header.jsx";
 import Hero from "../components/Hero.jsx";
 import UserCatalog from "../components/UserCatalog.jsx";
@@ -20,10 +20,14 @@ export default function UserPage() {
   const [sortBy, setSortBy] = useState("relevance");
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
-  const [page, setPage] = useState(1);
-  const [perPage, setPerPage] = useState(12);
   const [onlyAvailable, setOnlyAvailable] = useState(false);
   const [view, setView] = useState("grid");
+
+  // Infinite scroll state
+  const BATCH = 12;
+  const [visibleCount, setVisibleCount] = useState(BATCH);
+  const [isAutoLoading, setIsAutoLoading] = useState(false);
+  const sentinelRef = useRef(null);
 
   const [toasts, setToasts] = useState([]);
   const [submitting, setSubmitting] = useState(false);
@@ -42,8 +46,6 @@ export default function UserPage() {
     setSortBy(p.get("sort") || "relevance");
     setMinPrice(p.get("min") || "");
     setMaxPrice(p.get("max") || "");
-    setPerPage(Number(p.get("pp")) || 12);
-    setPage(Number(p.get("page")) || 1);
     setOnlyAvailable(p.get("avail") === "1");
     setView(p.get("view") === "list" ? "list" : "grid");
   }, []);
@@ -55,13 +57,12 @@ export default function UserPage() {
     if (sortBy !== "relevance") p.set("sort", sortBy);
     if (minPrice !== "") p.set("min", String(minPrice));
     if (maxPrice !== "") p.set("max", String(maxPrice));
-    if (perPage !== 12) p.set("pp", String(perPage));
-    if (page !== 1) p.set("page", String(page));
     if (onlyAvailable) p.set("avail", "1");
     if (view !== "grid") p.set("view", view);
-    const next = `${window.location.pathname}?${p.toString()}`;
+    const qs = p.toString();
+    const next = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
     window.history.replaceState({}, "", next);
-  }, [query, activeCat, sortBy, minPrice, maxPrice, perPage, page, onlyAvailable, view]);
+  }, [query, activeCat, sortBy, minPrice, maxPrice, onlyAvailable, view]);
 
   const loadData = useCallback(async () => {
     try {
@@ -99,7 +100,8 @@ export default function UserPage() {
     try { localStorage.setItem("cart", JSON.stringify(cart)); } catch (_) {}
   }, [cart]);
 
-  useEffect(() => { setPage(1); }, [query, activeCat, minPrice, maxPrice, sortBy, perPage, onlyAvailable]);
+  // Reset infinite scroll when filters change
+  useEffect(() => { setVisibleCount(BATCH); }, [query, activeCat, minPrice, maxPrice, sortBy, onlyAvailable, view]);
   useEffect(() => { pushToUrl(); }, [pushToUrl]);
 
   const filteredSorted = useMemo(() => {
@@ -124,11 +126,28 @@ export default function UserPage() {
   }, [products, query, activeCat, minPrice, maxPrice, sortBy, onlyAvailable]);
 
   const total = filteredSorted.length;
-  const totalPages = Math.max(1, Math.ceil(total / perPage));
-  const pageItems = useMemo(() => {
-    const start = (page - 1) * perPage;
-    return filteredSorted.slice(start, start + perPage);
-  }, [filteredSorted, page, perPage]);
+  const pageItems = useMemo(() => filteredSorted.slice(0, visibleCount), [filteredSorted, visibleCount]);
+
+  // IntersectionObserver to auto load next batch
+  useEffect(() => {
+    if (!sentinelRef.current) return;
+    const el = sentinelRef.current;
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting && !isAutoLoading) {
+          if (visibleCount < total) {
+            setIsAutoLoading(true);
+            setTimeout(() => {
+              setVisibleCount((c) => Math.min(total, c + BATCH));
+              setIsAutoLoading(false);
+            }, 250);
+          }
+        }
+      });
+    }, { root: null, rootMargin: "200px", threshold: 0 });
+    observer.observe(el);
+    return () => observer.unobserve(el);
+  }, [visibleCount, total, isAutoLoading]);
 
   const changeQty = (product, nextQty) => {
     setCart((prev) => {
@@ -153,7 +172,6 @@ export default function UserPage() {
     setMinPrice("");
     setMaxPrice("");
     setSortBy("relevance");
-    setPerPage(12);
     setOnlyAvailable(false);
     setView("grid");
   };
@@ -213,6 +231,8 @@ export default function UserPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Gagal membuat pesanan");
       addToast(`Pesanan berhasil! ID: ${data._id}`, "success", 4000);
+      // Open invoice in new tab
+      try { window.open(`${API}/orders/${data._id}/invoice`, "_blank"); } catch (_) {}
       setCart([]);
       setCartOpen(false);
     } catch (e) {
@@ -267,15 +287,6 @@ export default function UserPage() {
             <label htmlFor="avail" className="text-sm text-gray-700">Hanya tersedia</label>
           </div>
           <div>
-            <label className="block text-xs text-gray-600">Tampilkan</label>
-            <select value={perPage} onChange={(e) => setPerPage(Number(e.target.value))} className="mt-1 px-3 py-2 border border-gray-200 rounded-lg bg-white">
-              <option value={8}>8</option>
-              <option value={12}>12</option>
-              <option value={16}>16</option>
-              <option value={24}>24</option>
-            </select>
-          </div>
-          <div>
             <label className="block text-xs text-gray-600">Tampilan</label>
             <select value={view} onChange={(e) => setView(e.target.value)} className="mt-1 px-3 py-2 border border-gray-200 rounded-lg bg-white">
               <option value="grid">Grid</option>
@@ -297,15 +308,12 @@ export default function UserPage() {
               Tidak ada produk yang cocok dengan filter saat ini.
             </div>
           ) : (
-            <UserCatalog products={pageItems} cart={cart} changeQty={changeQty} addToCart={addToCart} view={view} />
-          )}
-
-          {totalPages > 1 && (
-            <div className="mt-6 flex items-center justify-center gap-2">
-              <button className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white disabled:opacity-50" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>Prev</button>
-              <div className="text-sm text-gray-700">Halaman {page} / {totalPages}</div>
-              <button className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white disabled:opacity-50" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>Next</button>
-            </div>
+            <>
+              <UserCatalog products={pageItems} cart={cart} changeQty={changeQty} addToCart={addToCart} view={view} />
+              <div ref={sentinelRef} className="h-10 flex items-center justify-center text-sm text-gray-500">
+                {visibleCount < total ? (isAutoLoading ? "Memuat..." : "Gulir untuk memuat lebih banyak") : "Semua produk telah dimuat"}
+              </div>
+            </>
           )}
         </section>
 
