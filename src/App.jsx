@@ -21,6 +21,37 @@ export default function App() {
   const [maxPrice, setMaxPrice] = useState("");
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(12);
+  const [onlyAvailable, setOnlyAvailable] = useState(false);
+  const [view, setView] = useState("grid"); // grid | list
+
+  // URL sync helpers
+  const applyFromUrl = useCallback(() => {
+    const p = new URLSearchParams(window.location.search);
+    setQuery(p.get("q") || "");
+    setActiveCat(p.get("cat") || "");
+    setSortBy(p.get("sort") || "relevance");
+    setMinPrice(p.get("min") || "");
+    setMaxPrice(p.get("max") || "");
+    setPerPage(Number(p.get("pp")) || 12);
+    setPage(Number(p.get("page")) || 1);
+    setOnlyAvailable(p.get("avail") === "1");
+    setView(p.get("view") === "list" ? "list" : "grid");
+  }, []);
+
+  const pushToUrl = useCallback(() => {
+    const p = new URLSearchParams();
+    if (query) p.set("q", query);
+    if (activeCat) p.set("cat", activeCat);
+    if (sortBy !== "relevance") p.set("sort", sortBy);
+    if (minPrice !== "") p.set("min", String(minPrice));
+    if (maxPrice !== "") p.set("max", String(maxPrice));
+    if (perPage !== 12) p.set("pp", String(perPage));
+    if (page !== 1) p.set("page", String(page));
+    if (onlyAvailable) p.set("avail", "1");
+    if (view !== "grid") p.set("view", view);
+    const next = `${window.location.pathname}?${p.toString()}`;
+    window.history.replaceState({}, "", next);
+  }, [query, activeCat, sortBy, minPrice, maxPrice, perPage, page, onlyAvailable, view]);
 
   const loadData = useCallback(async () => {
     try {
@@ -39,13 +70,19 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    applyFromUrl();
     loadData();
-  }, [loadData]);
+  }, [applyFromUrl, loadData]);
 
-  // Reset page when filters change
+  // Reset page when filters change (except direct page edits)
   useEffect(() => {
     setPage(1);
-  }, [query, activeCat, minPrice, maxPrice, sortBy, perPage]);
+  }, [query, activeCat, minPrice, maxPrice, sortBy, perPage, onlyAvailable]);
+
+  // Keep URL in sync
+  useEffect(() => {
+    pushToUrl();
+  }, [pushToUrl]);
 
   const filteredSorted = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -58,7 +95,8 @@ export default function App() {
       const price = Number(p.price) || 0;
       const matchesMin = min === null || price >= min;
       const matchesMax = max === null || price <= max;
-      return matchesQ && matchesC && matchesMin && matchesMax;
+      const matchesAvail = !onlyAvailable || p.in_stock !== false;
+      return matchesQ && matchesC && matchesMin && matchesMax && matchesAvail;
     });
 
     if (sortBy === "price-asc") arr.sort((a, b) => (a.price || 0) - (b.price || 0));
@@ -66,7 +104,7 @@ export default function App() {
     // relevance keeps original order
 
     return arr;
-  }, [products, query, activeCat, minPrice, maxPrice, sortBy]);
+  }, [products, query, activeCat, minPrice, maxPrice, sortBy, onlyAvailable]);
 
   const total = filteredSorted.length;
   const totalPages = Math.max(1, Math.ceil(total / perPage));
@@ -75,17 +113,21 @@ export default function App() {
     return filteredSorted.slice(start, start + perPage);
   }, [filteredSorted, page, perPage]);
 
-  const addToCart = (product) => {
+  const changeQty = (product, nextQty) => {
     setCart((prev) => {
       const idx = prev.findIndex((i) => i._id === product._id);
       if (idx >= 0) {
         const copy = [...prev];
-        copy[idx] = { ...copy[idx], qty: copy[idx].qty + 1 };
+        if (nextQty <= 0) copy.splice(idx, 1);
+        else copy[idx] = { ...copy[idx], qty: nextQty };
         return copy;
       }
-      return [...prev, { ...product, qty: 1 }];
+      if (nextQty > 0) return [...prev, { ...product, qty: nextQty }];
+      return prev;
     });
   };
+
+  const addToCart = (product) => changeQty(product, 1);
 
   const subtotal = useMemo(() => cart.reduce((s, i) => s + (i.price || 0) * i.qty, 0), [cart]);
 
@@ -96,6 +138,42 @@ export default function App() {
     setMaxPrice("");
     setSortBy("relevance");
     setPerPage(12);
+    setOnlyAvailable(false);
+    setView("grid");
+  };
+
+  const checkout = async () => {
+    if (cart.length === 0) return alert("Keranjang kosong");
+    try {
+      const payload = {
+        buyer_name: "Guest",
+        buyer_email: "guest@example.com",
+        buyer_address: "N/A",
+        items: cart.map((c) => ({
+          product_id: c._id,
+          title: c.title,
+          price: c.price,
+          quantity: c.qty,
+          image: c.image || null,
+        })),
+        subtotal,
+        delivery_fee: 0,
+        total: subtotal,
+        status: "pending",
+      };
+      const res = await fetch(`${API}/orders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Gagal membuat pesanan");
+      alert(`Pesanan berhasil! ID: ${data._id}`);
+      setCart([]);
+    } catch (e) {
+      console.error(e);
+      alert(`Checkout gagal: ${e.message}`);
+    }
   };
 
   return (
@@ -163,6 +241,10 @@ export default function App() {
                 <label className="block text-xs text-gray-600">Max Harga</label>
                 <input type="number" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} placeholder="" className="mt-1 w-28 px-3 py-2 border border-gray-200 rounded-lg" />
               </div>
+              <div className="flex items-center gap-2 mt-6">
+                <input id="avail" type="checkbox" checked={onlyAvailable} onChange={(e) => setOnlyAvailable(e.target.checked)} />
+                <label htmlFor="avail" className="text-sm text-gray-700">Hanya tersedia</label>
+              </div>
               <div>
                 <label className="block text-xs text-gray-600">Tampilkan</label>
                 <select value={perPage} onChange={(e) => setPerPage(Number(e.target.value))} className="mt-1 px-3 py-2 border border-gray-200 rounded-lg bg-white">
@@ -172,12 +254,19 @@ export default function App() {
                   <option value={24}>24</option>
                 </select>
               </div>
+              <div>
+                <label className="block text-xs text-gray-600">Tampilan</label>
+                <select value={view} onChange={(e) => setView(e.target.value)} className="mt-1 px-3 py-2 border border-gray-200 rounded-lg bg-white">
+                  <option value="grid">Grid</option>
+                  <option value="list">List</option>
+                </select>
+              </div>
               <button onClick={clearFilters} className="px-3 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50">Reset</button>
             </div>
           </div>
 
           {loading ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className={`${view === "grid" ? "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4" : "space-y-3"}`}>
               {Array.from({ length: 8 }).map((_, i) => (
                 <div key={i} className="h-64 rounded-2xl bg-gray-100 animate-pulse" />)
               )}
@@ -188,11 +277,55 @@ export default function App() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {pageItems.map((p) => (
-                  <ProductCard key={p._id} product={p} onAdd={addToCart} />
-                ))}
-              </div>
+              {view === "grid" ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {pageItems.map((p) => {
+                    const item = cart.find((c) => c._id === p._id);
+                    return (
+                      <ProductCard key={p._id} product={p} qty={item?.qty || 0} onChangeQty={changeQty} onAdd={addToCart} />
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {pageItems.map((p) => {
+                    const item = cart.find((c) => c._id === p._id);
+                    return (
+                      <div key={p._id} className="rounded-2xl border border-gray-200 bg-white p-3">
+                        <div className="flex gap-3">
+                          <div className="relative w-28 h-28 rounded-xl overflow-hidden bg-gray-50">
+                            {p.in_stock === false && (
+                              <div className="absolute left-2 top-2 z-10 rounded-full bg-rose-600 text-white text-xs px-2 py-1">Stok habis</div>
+                            )}
+                            <img src={p.image || "https://images.unsplash.com/photo-1584270354949-c26b0d5b5a35?q=80&w=600&auto=format&fit=crop"} className={`h-full w-full object-cover ${p.in_stock === false ? "grayscale" : ""}`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <h3 className="font-semibold text-gray-900 line-clamp-2">{p.title}</h3>
+                              <div className="text-emerald-700 font-bold">Rp{p.price?.toLocaleString("id-ID")}</div>
+                            </div>
+                            <p className="mt-1 text-sm text-gray-500 line-clamp-2">{p.description}</p>
+                            <div className="mt-3 flex items-center justify-between">
+                              <span className="text-xs px-2 py-1 rounded-full bg-emerald-50 text-emerald-700">{p.category}</span>
+                              {(item?.qty || 0) > 0 ? (
+                                <div className="flex items-center gap-2">
+                                  <button onClick={() => changeQty(p, Math.max(0, (item?.qty || 0) - 1))} className="w-8 h-8 grid place-items-center rounded-lg border border-gray-200 bg-white hover:bg-gray-50">-</button>
+                                  <span className="min-w-[1.5rem] text-center text-sm font-medium">{item?.qty || 0}</span>
+                                  <button onClick={() => changeQty(p, (item?.qty || 0) + 1)} disabled={p.in_stock === false} className="w-8 h-8 grid place-items-center rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-50">+</button>
+                                </div>
+                              ) : (
+                                <button onClick={() => changeQty(p, 1)} disabled={p.in_stock === false} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-60">
+                                  Tambah
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
               {totalPages > 1 && (
                 <div className="mt-6 flex items-center justify-center gap-2">
@@ -235,7 +368,7 @@ export default function App() {
                 <div>Subtotal</div>
                 <div>Rp{subtotal.toLocaleString("id-ID")}</div>
               </div>
-              <button className="w-full mt-3 px-4 py-2 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700">
+              <button onClick={checkout} className="w-full mt-3 px-4 py-2 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700">
                 Checkout
               </button>
             </div>
