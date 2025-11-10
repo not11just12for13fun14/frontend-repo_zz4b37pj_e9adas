@@ -3,6 +3,8 @@ import Header from "./components/Header.jsx";
 import Hero from "./components/Hero.jsx";
 import ProductCard from "./components/ProductCard.jsx";
 import AdminPanel from "./components/AdminPanel.jsx";
+import Toast from "./components/Toast.jsx";
+import CheckoutForm from "./components/CheckoutForm.jsx";
 
 const API = import.meta.env.VITE_BACKEND_URL || "";
 
@@ -24,6 +26,20 @@ export default function App() {
   const [perPage, setPerPage] = useState(12);
   const [onlyAvailable, setOnlyAvailable] = useState(false);
   const [view, setView] = useState("grid"); // grid | list
+
+  // UI feedback
+  const [toasts, setToasts] = useState([]);
+  const [submitting, setSubmitting] = useState(false);
+
+  const addToast = useCallback((message, type = "info", duration = 3000) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setToasts((t) => [...t, { id, message, type, duration }]);
+    return id;
+  }, []);
+
+  const removeToast = useCallback((id) => {
+    setToasts((t) => t.filter((x) => x.id !== id));
+  }, []);
 
   // URL sync helpers
   const applyFromUrl = useCallback(() => {
@@ -54,6 +70,7 @@ export default function App() {
     window.history.replaceState({}, "", next);
   }, [query, activeCat, sortBy, minPrice, maxPrice, perPage, page, onlyAvailable, view]);
 
+  // Data
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
@@ -65,15 +82,33 @@ export default function App() {
       setCategories(cc);
     } catch (e) {
       console.error(e);
+      addToast("Gagal memuat data", "error");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [addToast]);
 
   useEffect(() => {
     applyFromUrl();
     loadData();
   }, [applyFromUrl, loadData]);
+
+  // Persist cart to localStorage
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("cart");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) setCart(parsed);
+      }
+    } catch (_) {}
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("cart", JSON.stringify(cart));
+    } catch (_) {}
+  }, [cart]);
 
   // Reset page when filters change (except direct page edits)
   useEffect(() => {
@@ -143,13 +178,58 @@ export default function App() {
     setView("grid");
   };
 
-  const checkout = async () => {
-    if (cart.length === 0) return alert("Keranjang kosong");
+  // Coupon and totals calculation
+  const computeTotals = useCallback((currentSubtotal, couponCode) => {
+    let discount = 0;
+    let deliveryFee = currentSubtotal > 0 ? 15000 : 0;
+    let applied = null;
+    const code = (couponCode || "").trim().toUpperCase();
+    if (!currentSubtotal) return { discount: 0, deliveryFee: 0, total: 0, applied };
+
+    if (code === "HEMAT10") {
+      discount = Math.min(currentSubtotal * 0.1, 50000);
+      applied = "Diskon 10% (maks Rp50.000)";
+    } else if (code === "DISKON20") {
+      discount = Math.min(currentSubtotal * 0.2, 100000);
+      applied = "Diskon 20% (maks Rp100.000)";
+    } else if (code === "GRATISONGKIR") {
+      deliveryFee = 0;
+      applied = "Gratis ongkir";
+    }
+
+    const total = Math.max(0, Math.round(currentSubtotal - discount + deliveryFee));
+    return { discount: Math.round(discount), deliveryFee, total, applied };
+  }, []);
+
+  const [lastCoupon, setLastCoupon] = useState("");
+  const { discount, deliveryFee, total: grandTotal, applied: appliedCoupon } = useMemo(
+    () => computeTotals(subtotal, lastCoupon),
+    [subtotal, lastCoupon, computeTotals]
+  );
+
+  const checkout = async ({ name, email, address, coupon }) => {
+    if (cart.length === 0) {
+      addToast("Keranjang kosong", "error");
+      return;
+    }
+
+    // basic validation
+    const emailOk = /.+@.+\..+/.test(email || "");
+    if (!name || !emailOk || !address) {
+      addToast("Lengkapi data: nama, email valid, alamat", "error");
+      return;
+    }
+
+    setSubmitting(true);
     try {
+      setLastCoupon(coupon || "");
+      const totals = computeTotals(subtotal, coupon);
+
       const payload = {
-        buyer_name: "Guest",
-        buyer_email: "guest@example.com",
-        buyer_address: "N/A",
+        buyer_name: name,
+        buyer_email: email,
+        buyer_address: address,
+        coupon_code: (coupon || "").toUpperCase() || null,
         items: cart.map((c) => ({
           product_id: c._id,
           title: c.title,
@@ -158,8 +238,9 @@ export default function App() {
           image: c.image || null,
         })),
         subtotal,
-        delivery_fee: 0,
-        total: subtotal,
+        discount: totals.discount,
+        delivery_fee: totals.deliveryFee,
+        total: totals.total,
         status: "pending",
       };
       const res = await fetch(`${API}/orders`, {
@@ -169,12 +250,14 @@ export default function App() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Gagal membuat pesanan");
-      alert(`Pesanan berhasil! ID: ${data._id}`);
+      addToast(`Pesanan berhasil! ID: ${data._id}`, "success", 4000);
       setCart([]);
       setCartOpen(false);
     } catch (e) {
       console.error(e);
-      alert(`Checkout gagal: ${e.message}`);
+      addToast(`Checkout gagal: ${e.message}`, "error", 4000);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -366,11 +449,27 @@ export default function App() {
                   <div className="font-medium">Rp{(i.price * i.qty).toLocaleString("id-ID")}</div>
                 </div>
               ))}
-              <div className="pt-3 mt-3 border-t flex items-center justify-between font-semibold">
-                <div>Subtotal</div>
-                <div>Rp{subtotal.toLocaleString("id-ID")}</div>
+              <div className="pt-3 mt-3 border-t space-y-1">
+                <div className="flex items-center justify-between">
+                  <div className="text-gray-600">Subtotal</div>
+                  <div className="font-semibold">Rp{subtotal.toLocaleString("id-ID")}</div>
+                </div>
+                {discount > 0 && (
+                  <div className="flex items-center justify-between text-emerald-700">
+                    <div>Diskon {appliedCoupon ? `(${appliedCoupon})` : ""}</div>
+                    <div>- Rp{discount.toLocaleString("id-ID")}</div>
+                  </div>
+                )}
+                <div className="flex items-center justify-between">
+                  <div className="text-gray-600">Ongkir</div>
+                  <div>Rp{deliveryFee.toLocaleString("id-ID")}</div>
+                </div>
+                <div className="flex items-center justify-between font-semibold">
+                  <div>Total</div>
+                  <div>Rp{grandTotal.toLocaleString("id-ID")}</div>
+                </div>
               </div>
-              <button onClick={checkout} className="w-full mt-3 px-4 py-2 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700">
+              <button onClick={() => setCartOpen(true)} className="w-full mt-3 px-4 py-2 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700">
                 Checkout
               </button>
             </div>
@@ -385,45 +484,70 @@ export default function App() {
             className="absolute inset-0 bg-black/40"
             onClick={() => setCartOpen(false)}
           />
-          <div className="absolute right-0 top-0 h-full w-full sm:w-[26rem] bg-white shadow-xl flex flex-col">
+          <div className="absolute right-0 top-0 h-full w-full sm:w-[28rem] bg-white shadow-xl flex flex-col">
             <div className="p-4 border-b flex items-center justify-between">
               <h3 className="text-lg font-semibold">Keranjang</h3>
               <button onClick={() => setCartOpen(false)} className="px-3 py-1.5 rounded-md border border-gray-200 hover:bg-gray-50">Tutup</button>
             </div>
-            <div className="flex-1 overflow-auto p-4">
-              {cart.length === 0 ? (
-                <div className="text-gray-500">Keranjang kosong</div>
-              ) : (
-                <div className="space-y-4">
-                  {cart.map((i) => (
-                    <div key={i._id} className="flex items-start gap-3">
-                      <img src={i.image || "https://images.unsplash.com/photo-1584270354949-c26b0d5b5a35?q=80&w=300&auto=format&fit=crop"} className="w-16 h-16 rounded-lg object-cover" />
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium truncate">{i.title}</div>
-                        <div className="text-emerald-700 font-semibold">Rp{i.price?.toLocaleString("id-ID")}</div>
-                        <div className="mt-2 flex items-center gap-2">
-                          <button onClick={() => changeQty(i, Math.max(0, i.qty - 1))} className="w-8 h-8 grid place-items-center rounded-lg border border-gray-200 bg-white hover:bg-gray-50">-</button>
-                          <span className="min-w-[1.5rem] text-center text-sm font-medium">{i.qty}</span>
-                          <button onClick={() => changeQty(i, i.qty + 1)} className="w-8 h-8 grid place-items-center rounded-lg border border-gray-200 bg-white hover:bg-gray-50">+</button>
+            <div className="flex-1 overflow-auto p-4 space-y-6">
+              <div>
+                {cart.length === 0 ? (
+                  <div className="text-gray-500">Keranjang kosong</div>
+                ) : (
+                  <div className="space-y-4">
+                    {cart.map((i) => (
+                      <div key={i._id} className="flex items-start gap-3">
+                        <img src={i.image || "https://images.unsplash.com/photo-1584270354949-c26b0d5b5a35?q=80&w=300&auto=format&fit=crop"} className="w-16 h-16 rounded-lg object-cover" />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium truncate">{i.title}</div>
+                          <div className="text-emerald-700 font-semibold">Rp{i.price?.toLocaleString("id-ID")}</div>
+                          <div className="mt-2 flex items-center gap-2">
+                            <button onClick={() => changeQty(i, Math.max(0, i.qty - 1))} className="w-8 h-8 grid place-items-center rounded-lg border border-gray-200 bg-white hover:bg-gray-50">-</button>
+                            <span className="min-w-[1.5rem] text-center text-sm font-medium">{i.qty}</span>
+                            <button onClick={() => changeQty(i, i.qty + 1)} className="w-8 h-8 grid place-items-center rounded-lg border border-gray-200 bg-white hover:bg-gray-50">+</button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Checkout form */}
+              {cart.length > 0 && (
+                <div className="rounded-xl border border-gray-200 p-4">
+                  <h4 className="font-semibold mb-3">Data Pembeli</h4>
+                  <CheckoutForm onSubmit={checkout} submitting={submitting} />
                 </div>
               )}
             </div>
             <div className="p-4 border-t">
-              <div className="flex items-center justify-between font-semibold">
-                <div>Subtotal</div>
-                <div>Rp{subtotal.toLocaleString("id-ID")}</div>
+              <div className="space-y-1 text-sm">
+                <div className="flex items-center justify-between">
+                  <div className="text-gray-600">Subtotal</div>
+                  <div className="font-medium">Rp{subtotal.toLocaleString("id-ID")}</div>
+                </div>
+                {discount > 0 && (
+                  <div className="flex items-center justify-between text-emerald-700">
+                    <div>Diskon {appliedCoupon ? `(${appliedCoupon})` : ""}</div>
+                    <div>- Rp{discount.toLocaleString("id-ID")}</div>
+                  </div>
+                )}
+                <div className="flex items-center justify-between">
+                  <div className="text-gray-600">Ongkir</div>
+                  <div>Rp{deliveryFee.toLocaleString("id-ID")}</div>
+                </div>
+                <div className="flex items-center justify-between font-semibold text-base pt-1">
+                  <div>Total</div>
+                  <div>Rp{grandTotal.toLocaleString("id-ID")}</div>
+                </div>
               </div>
-              <button onClick={checkout} className="w-full mt-3 px-4 py-2 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700">
-                Checkout
-              </button>
             </div>
           </div>
         </div>
       )}
+
+      <Toast toasts={toasts} onClose={removeToast} />
 
       <footer className="mt-16 border-t border-gray-200 py-8 text-center text-sm text-gray-500">
         © {new Date().getFullYear()} BlueMarket. All rights reserved.
