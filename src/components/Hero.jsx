@@ -25,9 +25,9 @@ export default function Hero() {
               </a>
             </div>
             <div className="mt-8 grid grid-cols-3 gap-4">
-              <Feature icon={<Truck className=\"w-5 h-5 text-emerald-600\" />} title="Gratis Ongkir" subtitle=">100rb" />
-              <Feature icon={<ShieldCheck className=\"w-5 h-5 text-emerald-600\" />} title="Jaminan Segar" subtitle="100%" />
-              <Feature icon={<Zap className=\"w-5 h-5 text-emerald-600\" />} title="Cepat Sampai" subtitle="<2 jam" />
+              <Feature icon={<Truck className="w-5 h-5 text-emerald-600" />} title="Gratis Ongkir" subtitle=">100rb" />
+              <Feature icon={<ShieldCheck className="w-5 h-5 text-emerald-600" />} title="Jaminan Segar" subtitle="100%" />
+              <Feature icon={<Zap className="w-5 h-5 text-emerald-600" />} title="Cepat Sampai" subtitle="<2 jam" />
             </div>
           </div>
           <div className="relative">

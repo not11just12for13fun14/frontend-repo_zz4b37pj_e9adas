@@ -3,55 +3,7 @@
 > vite
 
 
-  VITE v5.4.20  ready in 209 ms
+  VITE v5.4.20  ready in 210 ms
 
   ➜  Local:   http://localhost:3000/
   ➜  Network: http://172.20.0.106:3000/
-2:00:03 PM [vite] Pre-transform error: Transform failed with 1 error:
-/home/workspace/src/components/Hero.jsx:28:46: ERROR: Expected "{" but found "\\"
-2:00:04 PM [vite] Internal server error: Transform failed with 1 error:
-/home/workspace/src/components/Hero.jsx:28:46: ERROR: Expected "{" but found "\\"
-  Plugin: vite:esbuild
-  File: /home/workspace/src/components/Hero.jsx:28:46
-  
-  Expected "{" but found "\\"
-  26 |              </div>
-  27 |              <div className="mt-8 grid grid-cols-3 gap-4">
-  28 |                <Feature icon={<Truck className=\"w-5 h-5 text-emerald-600\" />} title="Gratis Ongkir" subtitle=">100rb" />
-     |                                                ^
-  29 |                <Feature icon={<ShieldCheck className=\"w-5 h-5 text-emerald-600\" />} title="Jaminan Segar" subtitle="100%" />
-  30 |                <Feature icon={<Zap className=\"w-5 h-5 text-emerald-600\" />} title="Cepat Sampai" subtitle="<2 jam" />
-  
-      at failureErrorWithLog (/home/workspace/node_modules/esbuild/lib/main.js:1472:15)
-      at /home/workspace/node_modules/esbuild/lib/main.js:755:50
-      at responseCallbacks.<computed> (/home/workspace/node_modules/esbuild/lib/main.js:622:9)
-      at handleIncomingPacket (/home/workspace/node_modules/esbuild/lib/main.js:677:12)
-      at Socket.readFromStdout (/home/workspace/node_modules/esbuild/lib/main.js:600:7)
-      at Socket.emit (node:events:508:28)
-      at addChunk (node:internal/streams/readable:559:12)
-      at readableAddChunkPushByteMode (node:internal/streams/readable:510:3)
-      at Readable.push (node:internal/streams/readable:390:5)
-      at Pipe.onStreamRead (node:internal/stream_base_commons:189:23)
-2:00:26 PM [vite] Internal server error: Transform failed with 1 error:
-/home/workspace/src/components/Hero.jsx:28:46: ERROR: Expected "{" but found "\\"
-  Plugin: vite:esbuild
-  File: /home/workspace/src/components/Hero.jsx:28:46
-  
-  Expected "{" but found "\\"
-  26 |              </div>
-  27 |              <div className="mt-8 grid grid-cols-3 gap-4">
-  28 |                <Feature icon={<Truck className=\"w-5 h-5 text-emerald-600\" />} title="Gratis Ongkir" subtitle=">100rb" />
-     |                                                ^
-  29 |                <Feature icon={<ShieldCheck className=\"w-5 h-5 text-emerald-600\" />} title="Jaminan Segar" subtitle="100%" />
-  30 |                <Feature icon={<Zap className=\"w-5 h-5 text-emerald-600\" />} title="Cepat Sampai" subtitle="<2 jam" />
-  
-      at failureErrorWithLog (/home/workspace/node_modules/esbuild/lib/main.js:1472:15)
-      at /home/workspace/node_modules/esbuild/lib/main.js:755:50
-      at responseCallbacks.<computed> (/home/workspace/node_modules/esbuild/lib/main.js:622:9)
-      at handleIncomingPacket (/home/workspace/node_modules/esbuild/lib/main.js:677:12)
-      at Socket.readFromStdout (/home/workspace/node_modules/esbuild/lib/main.js:600:7)
-      at Socket.emit (node:events:508:28)
-      at addChunk (node:internal/streams/readable:559:12)
-      at readableAddChunkPushByteMode (node:internal/streams/readable:510:3)
-      at Readable.push (node:internal/streams/readable:390:5)
-      at Pipe.onStreamRead (node:internal/stream_base_commons:189:23)
