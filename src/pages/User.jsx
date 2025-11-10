@@ -4,6 +4,7 @@ import Hero from "../components/Hero.jsx";
 import UserCatalog from "../components/UserCatalog.jsx";
 import Toast from "../components/Toast.jsx";
 import CheckoutForm from "../components/CheckoutForm.jsx";
+import { getAuth } from "../lib/auth";
 
 const API = import.meta.env.VITE_BACKEND_URL || "";
 
@@ -194,6 +195,7 @@ export default function UserPage() {
     try {
       setLastCoupon(coupon || "");
       const totals = computeTotals(subtotal, coupon);
+      const auth = getAuth();
       const payload = {
         buyer_name: name,
         buyer_email: email,
@@ -205,8 +207,9 @@ export default function UserPage() {
         delivery_fee: totals.deliveryFee,
         total: totals.total,
         status: "pending",
+        payment_method: auth ? "greenpay" : "cod",
       };
-      const res = await fetch(`${API}/orders`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const res = await fetch(`${API}/orders`, { method: "POST", headers: { "Content-Type": "application/json", ...(auth ? { Authorization: `Bearer ${auth.token}` } : {}) }, body: JSON.stringify(payload) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Gagal membuat pesanan");
       addToast(`Pesanan berhasil! ID: ${data._id}`, "success", 4000);
@@ -219,10 +222,15 @@ export default function UserPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-emerald-50/50">
-      <Header onSearch={setQuery} cartCount={cart.length} onCartClick={() => setCartOpen(true)} role="user" onRoleChange={(r) => { if (r === 'admin') window.location.href = '/admin'; }} />
+      <Header onSearch={setQuery} cartCount={cart.length} onCartClick={() => setCartOpen(true)} />
       <Hero />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <section className="mb-8 rounded-2xl border border-gray-200 bg-white p-4">
+          <h3 className="font-semibold mb-2">Top up GreenPay via QRIS</h3>
+          <TopupWidget />
+        </section>
+
         <section id="categories">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-gray-900">Kategori</h2>
@@ -313,7 +321,6 @@ export default function UserPage() {
                   <div className="font-medium">Rp{(i.price * i.qty).toLocaleString("id-ID")}</div>
                 </div>
               ))}
-              {/* Totals are computed below using computeTotals hook: reuse logic */}
             </div>
           )}
         </aside>
@@ -366,8 +373,65 @@ export default function UserPage() {
       <Toast toasts={toasts} onClose={removeToast} />
 
       <footer className="mt-16 border-t border-gray-200 py-8 text-center text-sm text-gray-500">
-        © {new Date().getFullYear()} BlueMarket. All rights reserved.
+        © {new Date().getFullYear()} GreenFood. All rights reserved.
       </footer>
+    </div>
+  );
+}
+
+function TopupWidget() {
+  const [qris, setQris] = useState(null);
+  const [amount, setAmount] = useState("");
+  const [file, setFile] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [toasts, setToasts] = useState([]);
+
+  const addToast = (message, type = "info", duration = 3000) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setToasts((t) => [...t, { id, message, type, duration }]);
+  };
+  const removeToast = (id) => setToasts((t) => t.filter((x) => x.id !== id));
+
+  useEffect(() => {
+    fetch(`${API}/settings/qris`).then(r=>r.json()).then(setQris).catch(()=>{});
+  }, []);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    const auth = getAuth();
+    if (!auth) { addToast("Silakan login terlebih dahulu", "error"); return; }
+    try {
+      setLoading(true);
+      const fd = new FormData();
+      fd.set("amount", String(amount));
+      if (file) fd.set("proof", file);
+      const r = await fetch(`${API}/wallet/topup-request`, { method: "POST", headers: { Authorization: `Bearer ${auth.token}` }, body: fd });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || "Gagal mengirim bukti top up");
+      addToast("Top up diajukan, menunggu konfirmasi admin", "success");
+      setAmount(""); setFile(null);
+    } catch (e) { addToast(e.message, "error"); }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <div>
+      {qris?.image ? (
+        <img src={`${API}${qris.image}`} alt="QRIS" className="w-48 h-48 object-contain border rounded-lg mb-3" />
+      ) : (
+        <div className="text-sm text-gray-500 mb-3">QRIS belum diunggah admin.</div>
+      )}
+      <form onSubmit={submit} className="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
+        <div>
+          <label className="block text-xs text-gray-600">Nominal</label>
+          <input type="number" value={amount} onChange={(e)=>setAmount(e.target.value)} placeholder="50000" className="mt-1 w-40 px-3 py-2 border border-gray-200 rounded-lg" />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-600">Bukti Transfer</label>
+          <input type="file" accept="image/*" onChange={(e)=>setFile(e.target.files?.[0]||null)} className="mt-1 w-64 px-3 py-2 border border-gray-200 rounded-lg" />
+        </div>
+        <button disabled={loading} className="px-4 py-2 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50">Ajukan Top Up</button>
+      </form>
     </div>
   );
 }

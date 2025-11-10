@@ -1,5 +1,10 @@
+const API = import.meta.env.VITE_BACKEND_URL || "";
+
 export default function ProductCard({ product, qty = 0, onChangeQty, onAdd }) {
   const out = product.in_stock === false;
+  const imgSrc = product.image
+    ? (product.image.startsWith("/uploads") ? `${API}${product.image}` : product.image)
+    : "https://images.unsplash.com/photo-1584270354949-c26b0d5b5a35?q=80&w=600&auto=format&fit=crop";
 
   const inc = () => {
     const next = qty + 1;
@@ -17,7 +22,7 @@ export default function ProductCard({ product, qty = 0, onChangeQty, onAdd }) {
           <div className="absolute left-2 top-2 z-10 rounded-full bg-rose-600 text-white text-xs px-2 py-1">Stok habis</div>
         )}
         <img
-          src={product.image || "https://images.unsplash.com/photo-1584270354949-c26b0d5b5a35?q=80&w=600&auto=format&fit=crop"}
+          src={imgSrc}
           alt={product.title}
           className={`h-full w-full object-cover transition-transform ${out ? "grayscale" : "group-hover:scale-[1.03]"}`}
         />

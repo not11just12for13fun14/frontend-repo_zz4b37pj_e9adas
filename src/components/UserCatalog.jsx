@@ -1,5 +1,7 @@
 import ProductCard from "./ProductCard";
 
+const API = import.meta.env.VITE_BACKEND_URL || "";
+
 export default function UserCatalog({ products, cart, changeQty, addToCart, view }) {
   return (
     <>
@@ -16,6 +18,7 @@ export default function UserCatalog({ products, cart, changeQty, addToCart, view
         <div className="space-y-3">
           {products.map((p) => {
             const item = cart.find((c) => c._id === p._id);
+            const imgSrc = p.image ? (p.image.startsWith("/uploads") ? `${API}${p.image}` : p.image) : "https://images.unsplash.com/photo-1584270354949-c26b0d5b5a35?q=80&w=600&auto=format&fit=crop";
             return (
               <div key={p._id} className="rounded-2xl border border-gray-200 bg-white p-3">
                 <div className="flex gap-3">
@@ -23,7 +26,7 @@ export default function UserCatalog({ products, cart, changeQty, addToCart, view
                     {p.in_stock === false && (
                       <div className="absolute left-2 top-2 z-10 rounded-full bg-rose-600 text-white text-xs px-2 py-1">Stok habis</div>
                     )}
-                    <img src={p.image || "https://images.unsplash.com/photo-1584270354949-c26b0d5b5a35?q=80&w=600&auto=format&fit=crop"} className={`h-full w-full object-cover ${p.in_stock === false ? "grayscale" : ""}`} />
+                    <img src={imgSrc} className={`h-full w-full object-cover ${p.in_stock === false ? "grayscale" : ""}`} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">

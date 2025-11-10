@@ -5,6 +5,7 @@ import App from './App'
 import Test from './Test'
 import AdminPage from './pages/Admin'
 import UserPage from './pages/User'
+import LoginPage from './pages/Login'
 import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -13,6 +14,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <Routes>
         <Route path="/" element={<UserPage />} />
         <Route path="/admin" element={<AdminPage />} />
+        <Route path="/login" element={<LoginPage />} />
         <Route path="/legacy" element={<App />} />
         <Route path="/test" element={<Test />} />
       </Routes>

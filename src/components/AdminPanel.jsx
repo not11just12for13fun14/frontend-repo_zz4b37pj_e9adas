@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { getAuth } from "../lib/auth";
 
 const API = import.meta.env.VITE_BACKEND_URL || "";
 
 export default function AdminPanel({ onDataChanged }) {
   const [tab, setTab] = useState("product");
   const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
   const fetchCategories = async () => {
@@ -85,9 +85,11 @@ function CategoryForm({ onCreated }) {
     }
     setLoading(true);
     try {
+      const auth = getAuth();
+      if (!auth) throw new Error("Harus login sebagai admin");
       const res = await fetch(`${API}/categories`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Role": "admin" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${auth.token}` },
         body: JSON.stringify({ name, slug })
       });
       if (!res.ok) {
@@ -129,7 +131,7 @@ function ProductForm({ categories, onCreated }) {
   const [price, setPrice] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
-  const [image, setImage] = useState("");
+  const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -142,17 +144,25 @@ function ProductForm({ categories, onCreated }) {
     }
     setLoading(true);
     try {
-      const payload = { title, price: Number(price), description, category, image };
+      const auth = getAuth();
+      if (!auth) throw new Error("Harus login sebagai admin");
+      const fd = new FormData();
+      fd.set("title", title);
+      fd.set("price", String(price));
+      fd.set("description", description);
+      fd.set("category", category);
+      if (file) fd.set("image", file);
+
       const res = await fetch(`${API}/products`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Role": "admin" },
-        body: JSON.stringify(payload),
+        headers: { Authorization: `Bearer ${auth.token}` },
+        body: fd,
       });
+      const data = await res.json();
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
         throw new Error(data.detail || "Gagal menambahkan produk");
       }
-      setTitle(""); setPrice(""); setDescription(""); setCategory(""); setImage("");
+      setTitle(""); setPrice(""); setDescription(""); setCategory(""); setFile(null);
       onCreated?.();
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
@@ -178,8 +188,8 @@ function ProductForm({ categories, onCreated }) {
         </select>
       </div>
       <div className="md:col-span-2 lg:col-span-1">
-        <label className="block text-sm font-medium text-gray-700">URL Gambar Produk</label>
-        <input value={image} onChange={(e) => setImage(e.target.value)} className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg" placeholder="https://..." />
+        <label className="block text-sm font-medium text-gray-700">Foto Produk</label>
+        <input type="file" accept="image/*" onChange={(e)=>setFile(e.target.files?.[0]||null)} className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg" />
       </div>
       <div className="md:col-span-2 lg:col-span-3">
         <label className="block text-sm font-medium text-gray-700">Deskripsi</label>
