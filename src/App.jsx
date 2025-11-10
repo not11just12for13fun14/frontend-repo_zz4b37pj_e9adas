@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import Header from "./components/Header.jsx";
 import Hero from "./components/Hero.jsx";
 import ProductCard from "./components/ProductCard.jsx";
+import AdminPanel from "./components/AdminPanel.jsx";
 
 const API = import.meta.env.VITE_BACKEND_URL || "";
 
@@ -12,24 +13,27 @@ export default function App() {
   const [activeCat, setActiveCat] = useState("");
   const [cart, setCart] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [adminOpen, setAdminOpen] = useState(false);
+
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [pc, cc] = await Promise.all([
+        fetch(`${API}/products`).then((r) => r.json()),
+        fetch(`${API}/categories`).then((r) => r.json()),
+      ]);
+      setProducts(pc);
+      setCategories(cc);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const [pc, cc] = await Promise.all([
-          fetch(`${API}/products`).then((r) => r.json()),
-          fetch(`${API}/categories`).then((r) => r.json()),
-        ]);
-        setProducts(pc);
-        setCategories(cc);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, []);
+    loadData();
+  }, [loadData]);
 
   const filtered = useMemo(() => {
     return products.filter((p) => {
@@ -62,12 +66,21 @@ export default function App() {
         <section id="categories">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-gray-900">Kategori</h2>
-            <button
-              className={`text-sm px-3 py-1.5 rounded-lg border ${!activeCat ? "bg-emerald-600 text-white border-emerald-600" : "border-gray-200"}`}
-              onClick={() => setActiveCat("")}
-            >
-              Semua
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                className={`text-sm px-3 py-1.5 rounded-lg border ${!activeCat ? "bg-emerald-600 text-white border-emerald-600" : "border-gray-200"}`}
+                onClick={() => setActiveCat("")}
+              >
+                Semua
+              </button>
+              <button
+                onClick={() => setAdminOpen((v) => !v)}
+                className="text-sm px-3 py-1.5 rounded-lg border border-emerald-200 text-emerald-700 bg-white hover:bg-emerald-50"
+                title="Buka panel admin untuk input produk/kategori"
+              >
+                {adminOpen ? "Tutup Admin" : "Buka Admin"}
+              </button>
+            </div>
           </div>
           <div className="flex gap-3 overflow-x-auto pb-2">
             {categories.map((c) => (
@@ -81,6 +94,10 @@ export default function App() {
             ))}
           </div>
         </section>
+
+        {adminOpen && (
+          <AdminPanel onDataChanged={loadData} />
+        )}
 
         <section id="products" className="mt-10">
           <div className="flex items-center justify-between mb-4">
